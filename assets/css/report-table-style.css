@@ -1,0 +1,58 @@
+table{
+	width:100%;
+}
+
+table.report tr.selected > td{
+background:#dbdbdb;
+}
+table.report{}
+table.report td,table.report th{
+border-left:1px solid #000000;
+border-top:1px solid #000000;          
+padding:3px;}
+table.report thead > tr th{text-align:center;font-weight:normal;background:#EEEEEE;}
+
+table.report tr > td:last-child,table.report tr > th:last-child{border-right:1px solid #000000}
+table.report tr:last-child > td{border-bottom:1px solid #000000}
+
+table.report tr.odd > td{background:#ffffff;}
+table.report tr.even > td{background:#f3f3f3;}
+
+table.report tfoot > tr td{border-top:none!important;}
+table.report tfoot tr > td:first-child{background:#EEEEEE;}
+
+table.report th.bor-right,table.report td.bor-right{
+	border-right:1px solid #000
+}
+table.report th.bor-bottom,table.report td.bor-bottom{
+	border-bottom:1px solid #000
+}
+table.report th.bor-top,table.report td.bor-top{
+	border-top:1px solid #000
+}
+table.signiture{
+	width:100%;
+}
+table.signiture td{
+	font-size:0.9em;
+}
+
+table.noborder{	
+}
+table.noborder td{
+	border:none!important;
+	padding:2px!important;
+}
+
+table.nopadding td{
+	padding:0!important;
+}
+
+table.smallfont td{
+	font-size:0.9em!important;
+}
+
+table td.nobor-top{border-top:none!important;}
+table td.nobor-bottom{border-bottom:none!important;}
+table td.nobor-right{border-right:none!important;}
+table td.nobor-left{border-left:none!important;}
