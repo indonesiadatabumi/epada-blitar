@@ -3,3 +3,4 @@
 /app/config/database.php
 /.DS_Store
 /API/logs/
+/API/koneksi.php
