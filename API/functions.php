@@ -1,58 +1,75 @@
 <?php
 
+function inquiry_log($pesan, $level = 'INFO')
+{
+    $log_file = 'logs/inquiry.log';
+
+    $timestamp = date('Y-m-d H:i:s');
+    $log_entry = "[$timestamp] [$level] $pesan\n";
+
+    file_put_contents($log_file, $log_entry, FILE_APPEND);
+}
+
+function payment_log($pesan, $level = 'INFO')
+{
+    $log_file = 'logs/payment.log';
+
+    $timestamp = date('Y-m-d H:i:s');
+    $log_entry = "[$timestamp] [$level] $pesan\n";
+
+    file_put_contents($log_file, $log_entry, FILE_APPEND);
+}
+
+function reversal_log($pesan, $level = 'INFO')
+{
+    $log_file = 'logs/reversal.log';
+
+    $timestamp = date('Y-m-d H:i:s');
+    $log_entry = "[$timestamp] [$level] $pesan\n";
+
+    file_put_contents($log_file, $log_entry, FILE_APPEND);
+}
+
 function get_diff_months($startDate, $endDate, $determination = 8)
 {
+    try {
+        if (empty($startDate) || empty($endDate)) {
+            throw new Exception("Tanggal tidak boleh kosong");
+        }
 
-    $start_timestamp = strtotime($startDate);
-    $end_timestamp = strtotime($endDate);
+        $start_timestamp = strtotime($startDate);
+        $end_timestamp = strtotime($endDate);
 
-    if ($end_timestamp > $start_timestamp) {
-        //jika SPTPD maka perhitungannya per bulan
+        if (!$start_timestamp || !$end_timestamp) {
+            throw new Exception("Format tanggal tidak valid: $startDate / $endDate");
+        }
+
+        if ($end_timestamp <= $start_timestamp) {
+            return 0;
+        }
+
         if ($determination == 8) {
-            // Assume YYYY-mm-dd - as is common MYSQL format
             $splitStart = explode('-', $startDate);
             $splitEnd = explode('-', $endDate);
 
-            if (is_array($splitStart) && is_array($splitEnd)) {
-                $startYear = $splitStart[0];
-                $startMonth = $splitStart[1];
-                $endYear = $splitEnd[0];
-                $endMonth = $splitEnd[1];
-                $endDay = $splitEnd[2];
+            if (count($splitStart) != 3 || count($splitEnd) != 3) {
+                throw new Exception("Format tanggal tidak sesuai (YYYY-MM-DD)");
+            }
 
-                // $tgl1 = new DateTime($startDate);
-                // $tgl2 = new DateTime($endDate);
-                // $jarak = $tgl2->diff($tgl1);
+            list($startYear, $startMonth) = $splitStart;
+            list($endYear, $endMonth, $endDay) = $splitEnd;
 
-                // if ($jarak->m > 0) {
-                //     if ($startMonth != 12) {
-                //         $startMonth = $startMonth + 1;
-                //     } else {
-                //         $startMonth = 1;
-                //         $startYear = $startYear + 1;
-                //     }
-                // }
+            $difYears = $endYear - $startYear;
+            $difMonth = $endMonth - $startMonth;
 
-                $difYears = $endYear - $startYear;
-                $difMonth = $endMonth - $startMonth;
-
-                if (0 == $difYears && $difMonth > 0) { // same year, dif months
-                    return $difMonth;
-                } else if (0 == $difYears && $difMonth == 0 && $endDay > 10) {
-                    $difMonth = 1;
-                    return $difMonth;
-                } else if (1 == $difYears) {
-                    $startToEnd = 12 - $startMonth; // months remaining in start year(13 to include final month
-                    return ($startToEnd + $endMonth); // above + end month date
-                } else if ($difYears > 1) {
-                    $startToEnd = 12 - $startMonth; // months remaining in start year 
-                    $yearsRemaing = $difYears - 1;  // minus the years of the start and the end year
-                    $remainingMonths = 12 * $yearsRemaing; // tally up remaining months
-                    $totalMonths = $startToEnd + $remainingMonths + $endMonth; // Monthsleft + full years in between + months of last year
-                    return $totalMonths;
-                } else {
-                    return 0;
-                }
+            if ($difYears == 0 && $difMonth > 0) {
+                return $difMonth;
+            } else if ($difYears == 0 && $difMonth == 0 && $endDay > 10) {
+                return 1;
+            } else if ($difYears == 1) {
+                return (12 - $startMonth) + $endMonth;
+            } else if ($difYears > 1) {
+                return (12 - $startMonth) + (12 * ($difYears - 1)) + $endMonth;
             } else {
                 return 0;
             }
@@ -61,19 +78,28 @@ function get_diff_months($startDate, $endDate, $determination = 8)
             $months = ceil($difference / 86400 / 30);
             return $months;
         }
-    } else {
-        return 0;
+    } catch (Exception $e) {
+        inquiry_log("ERROR in get_diff_months: " . $e->getMessage(), "ERROR");
+        return false;
     }
 }
 
 function assess_fine($tax, $diff_month)
 {
-    $fine = ceil(0.02 * $tax * $diff_month);
-    return $fine;
+    if (!is_numeric($tax) || !is_numeric($diff_month)) {
+        inquiry_log("Nilai pajak atau selisih bulan tidak valid di assess_fine", "ERROR");
+        return false;
+    }
+
+    return ceil(0.02 * $tax * $diff_month);
 }
 
 function assess_fine_new($tax, $diff_month)
 {
-    $fine = ceil(0.01 * $tax * $diff_month);
-    return $fine;
+    if (!is_numeric($tax) || !is_numeric($diff_month)) {
+        inquiry_log("Nilai pajak atau selisih bulan tidak valid di assess_fine_new", "ERROR");
+        return false;
+    }
+
+    return ceil(0.01 * $tax * $diff_month);
 }

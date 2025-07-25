@@ -7,11 +7,17 @@ header("Access-Control-Allow-Methods: GET");
 require_once "koneksi.php";
 require_once "functions.php";
 
-if (function_exists($_GET['function'])) {
-    $_GET['function']();
-}
-
 $data = json_decode(file_get_contents("php://input"));
+
+if (empty($_GET['Nop']) || empty($_GET['Merchant'])) {
+    inquiry_log("Response: Bad Request. Request: " . json_encode($_GET), 'ERROR');
+    http_response_code(400);
+    echo json_encode([
+        'success' => false,
+        'message' => 'Bad Request'
+    ]);
+    exit;
+}
 
 $kode_billing =  $_GET['Nop'];
 $merchant_channel =  $_GET['Merchant'];
@@ -24,13 +30,26 @@ $sql = "SELECT a.*, b.jenis_spt_id, b.jenis_ketetapan, b.tgl_jatuh_tempo, c.komp
         LEFT JOIN public.spt_detil_abt AS d ON a.spt_id=d.spt_id
         WHERE a.kode_billing='" . $kode_billing . "'";
 $query = pg_query($link, $sql);
+
+if (!$query) {
+    inquiry_log("Sql cek data tagihan error: " . pg_last_error($link), 'ERROR');
+    http_response_code(500);
+    echo json_encode([
+        'success' => false,
+        'message' => 'Sql cek data tagihan error'
+    ]);
+    exit;
+}
+
 $row = pg_fetch_array($query);
 
 if (!$row) {
+    inquiry_log("Response: DATA TAGIHAN TIDAK DITEMUKAN. Received: " . json_encode($_GET), 'ERROR');
     $response_code    = "10";
     $message        = "DATA TAGIHAN TIDAK DITEMUKAN";
 } else {
     if ($row['status_bayar'] == '1') {
+        inquiry_log("Response: DATA TAGIHAN TELAH LUNAS. Received: " . json_encode($_GET), 'ERROR');
         $response_code    = "13";
         $message        = "DATA TAGIHAN TELAH LUNAS";
     } else {
@@ -95,11 +114,32 @@ if (!$row) {
                     $jatuh_tempo = date('Y-m-30', strtotime($masa_lapor));
                 }
             }
+
+            // Hitung denda
             $diff_month = get_diff_months($jatuh_tempo, date('Y-m-d'), $row['jenis_spt_id']);
+
+            if ($diff_month === false) {
+                http_response_code(500);
+                echo json_encode(array("success" => false, "message" => "Tanggal jatuh tempo tidak valid"));
+                exit;
+            }
+
             if ($row['pajak_id'] == '6') {
                 $get_denda = assess_fine($pokok_pajak, $diff_month);
+
+                if ($get_denda === false) {
+                    http_response_code(500);
+                    echo json_encode(array("success" => false, "message" => "Denda tidak valid"));
+                    exit;
+                }
             } else {
                 $get_denda = assess_fine_new($pokok_pajak, $diff_month);
+
+                if ($get_denda === false) {
+                    http_response_code(500);
+                    echo json_encode(array("success" => false, "message" => "Denda tidak valid"));
+                    exit;
+                }
             }
 
 
@@ -107,50 +147,9 @@ if (!$row) {
             $total_bayar = $pokok_pajak + $get_denda + $sanksi_lapor;
         }
 
-        // if ($row['nama_kegus'] == 'Jasa Boga / Katering dan Sejenisnya') {
-        //     if (date('m', strtotime($masa_lapor)) == '02') {
-        //         $jatuh_tempo = date('Y-m-28', strtotime($masa_lapor));
-        //     } else {
-        //         $jatuh_tempo = date('Y-m-30', strtotime($masa_lapor));
-        //     }
-        //     $get_denda = 0;
-        //     $sanksi_lapor = 0;
-        //     $total_bayar = $pokok_pajak + $get_denda + $sanksi_lapor;
-        // } else {
-
-        //     if (date('Y', strtotime($masa_pajak1)) <= '2023' && date('m', strtotime($masa_pajak1)) <= '12') {
-        //         if (date('m', strtotime($masa_lapor)) == '02') {
-        //             $jatuh_tempo = date('Y-m-28', strtotime($masa_lapor));
-        //         } else {
-        //             $jatuh_tempo = date('Y-m-30', strtotime($masa_lapor));
-        //         }
-        //         $diff_month = get_diff_months($jatuh_tempo, date('Y-m-d'), $row['jenis_spt_id']);
-        //         $get_denda = assess_fine($pokok_pajak, $diff_month);
-        //         $sanksi_lapor = 0;
-        //         $total_bayar = $pokok_pajak + $get_denda + $sanksi_lapor;
-        //     } else {
-        //         $jatuh_tempo = date('Y-m-10', strtotime($masa_lapor));
-        //         $diff_month = get_diff_months($jatuh_tempo, date('Y-m-d'), $row['jenis_spt_id']);
-        //         $get_denda = assess_fine_new($pokok_pajak, $diff_month);
-        //         $masa_kemarin = date('Y-m-d', strtotime("-1 months", strtotime($masa_pajak1)));
-        //         // cek tgl lapor pajak bulan kemarin
-        //         $sql = "SELECT tgl_proses FROM payment.v_payment WHERE masa_pajak1 = '$masa_kemarin' AND wp_wr_id = '$wp_wr_id'";
-        //         $query = pg_query($link, $sql);
-        //         $cek_lapor_pajak = pg_fetch_array($query);
-
-        //         $tgl_lapor_lalu = date('d', strtotime($cek_lapor_pajak['tgl_proses']));
-
-        //         if ($tgl_lapor_lalu == null || $tgl_lapor_lalu > '15') {
-        //             $sanksi_lapor = 100000;
-        //         } else {
-        //             $sanksi_lapor = 0;
-        //         }
-        //         $total_bayar = $pokok_pajak + $get_denda + $sanksi_lapor;
-        //     }
-        // }
-
         $transaction_id = date("YmdHis") . rand("1000", "9999");
 
+        inquiry_log("Response: Success. Received: " . json_encode($_GET), 'INFO');
         $response_code    = "00";
         $message        = "Success";
     }

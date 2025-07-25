@@ -5,13 +5,32 @@ header("Content-Type: application/json; charset=UTF-8");
 header("Access-Control-Allow-Methods: GET");
 
 require_once "koneksi.php";
-include "functions.php";
-
-if (function_exists($_GET['function'])) {
-    $_GET['function']();
-}
+require_once "functions.php";
 
 $data = json_decode(file_get_contents("php://input"));
+
+if (!$data) {
+    payment_log("Invalid JSON Body", 'ERROR');
+    http_response_code(400);
+    echo json_encode([
+        'success' => false,
+        'message' => 'Invalid JSON body'
+    ]);
+    exit;
+}
+$required_fields = ['Nop', 'Merchant', 'DateTime', 'Masa', 'Tahun', 'Pokok', 'Total'];
+
+foreach ($required_fields as $field) {
+    if (empty($data->$field)) {
+        payment_log("Missing field: $field. Request: " . json_encode($data), 'ERROR');
+        http_response_code(400);
+        echo json_encode([
+            'success' => false,
+            'message' => "Field '$field' wajib diisi"
+        ]);
+        exit;
+    }
+}
 
 $kode_billing =  $data->Nop;
 $merchant_channel =  $data->Merchant;
@@ -29,7 +48,19 @@ $sql = "SELECT a.*, b.kompensasi, c.hrg_0_50 FROM payment.v_payment AS a
         LEFT JOIN public.spt_detil_abt AS c ON a.spt_id=c.spt_id
         WHERE a.kode_billing='" . $kode_billing . "'";
 $query = pg_query($link, $sql);
+
+if (!$query) {
+    payment_log("Sql cek data tagihan error: " . pg_last_error($link), 'ERROR');
+    http_response_code(500);
+    echo json_encode([
+        'success' => false,
+        'message' => 'Sql cek data tagihan error'
+    ]);
+    exit;
+}
+
 $row = pg_fetch_array($query);
+
 $pokok_pajak  = round($row['pajak']);
 $nilai_terkena_pajak  = round($row['nilai_terkena_pajak']);
 $status_bayar = $row['status_bayar'];
@@ -63,6 +94,7 @@ if ($status_bayar == '1') {
                 VALUES('$kode_billing','$merchant_channel','$curr_time','$masa','$tahun',$pokok,$denda,$total,'DATA TAGIHAN TELAH LUNAS')";
     $result = pg_query($link, $sql);
 
+    payment_log("Response: DATA TAGIHAN TELAH LUNAS. Received: " . json_encode($data), 'ERROR');
     $response_code    = "13";
     $message        = "DATA TAGIHAN TELAH LUNAS";
 } elseif (empty($kd_booking)) {
@@ -71,6 +103,7 @@ if ($status_bayar == '1') {
                 VALUES('$kode_billing','$merchant_channel','$curr_time','$masa','$tahun',$pokok,$denda,$total,'DATA TAGIHAN TIDAK DITEMUKAN')";
     $result = pg_query($link, $sql);
 
+    payment_log("Response: DATA TAGIHAN TIDAK DITEMUKAN. Received: " . json_encode($data), 'ERROR');
     $response_code    = "10";
     $message        = "DATA TAGIHAN TIDAK DITEMUKAN";
 } elseif ($pokok_pajak != $pokok) {
@@ -79,6 +112,7 @@ if ($status_bayar == '1') {
                 VALUES('$kode_billing','$merchant_channel','$curr_time','$masa','$tahun',$pokok,$denda,$total,'JUMLAH TAGIHAN YANG DIBAYARKAN TIDAK SESUAI')";
     $result = pg_query($link, $sql);
 
+    payment_log("Response: JUMLAH TAGIHAN YANG DIBAYARKAN TIDAK SESUAI. Received: " . json_encode($data), 'ERROR');
     $response_code    = "14";
     $message        = "JUMLAH TAGIHAN YANG DIBAYARKAN TIDAK SESUAI";
 } else {
@@ -88,6 +122,17 @@ if ($status_bayar == '1') {
             LEFT JOIN (SELECT tgl_jatuh_tempo, kode_billing FROM v_penyetoran_sspd) AS c ON a.kode_billing=c.kode_billing 
             WHERE a.kode_billing='" . $kode_billing . "'";
     $query = pg_query($link, $sql);
+
+    if (!$query) {
+        payment_log("Sql cek data tagihan error: " . pg_last_error($link), 'ERROR');
+        http_response_code(500);
+        echo json_encode([
+            'success' => false,
+            'message' => 'Sql cek data tagihan error'
+        ]);
+        exit;
+    }
+
     $row2 = pg_fetch_array($query);
     $spt_id = $row2['spt_id'];
     $pajak_id = $row2['pajak_id'];
@@ -173,32 +218,45 @@ if ($status_bayar == '1') {
                 VALUES($newid,$spt_id,$pajak_id,$wp_wr_id,$wp_wr_detil_id,'$npwprd',$jenis_spt_id, $loket_pembayaran,'$rekening_id',$no_tranksaksi,$last_numb,
                         '$kode_sts','$kode_billing',$tahun_pajak,'$masa_pajak1','$masa_pajak2',$pokok_pajak,$denda,$total,'$curr_date','$tgl_jatuh_tempo','$created_by','$curr_time','$merchant_channel')";
         $result = pg_query($link, $sql);
+        if (!$result) {
+            throw new Exception("Gagal insert transaksi_pajak: " . pg_last_error($link));
+        }
 
         //insert transaksi_pajak_detil
         $sql = "INSERT INTO transaksi_pajak_detil(transaksi_id,rekening_id,tahun_pajak,jumlah_pajak,tgl_bayar)
                 VALUES($newid,'$rekening_id',$tahun_pajak,$pokok_pajak,'$curr_date')";
         $result = pg_query($link, $sql);
+        if (!$result) {
+            throw new Exception("Gagal insert transaksi_pajak_detil pokok: " . pg_last_error($link));
+        }
 
         if ($denda != 0 || $denda != null) {
             $sql = "SELECT rekening_id FROM v_rekening AS a 
             WHERE pajak_id='" . $pajak_id . "' AND  jenis_rekening='B'";
             $query = pg_query($link, $sql);
+            if (!$query) {
+                throw new Exception("Gagal select rekening denda: " . pg_last_error($link));
+            }
+
             $row3 = pg_fetch_array($query);
             $rekening_id_denda = $row3['rekening_id'];
 
             //insert transaksi_pajak_detil
             $sql2 = "INSERT INTO transaksi_pajak_detil(transaksi_id,rekening_id,tahun_pajak,jumlah_pajak,tgl_bayar)VALUES($newid,'$rekening_id_denda',$tahun_pajak,$denda,'$curr_date')";
             $result = pg_query($link, $sql2);
+            if (!$result) {
+                throw new Exception("Gagal insert transaksi_pajak_detil denda: " . pg_last_error($link));
+            }
         }
 
         if ($row2['jenis_spt_id'] == 1 || $row2['jenis_spt_id'] == 8) {
-            //update spt
             $sql = "UPDATE spt SET status_bayar='1' WHERE kode_billing='$kode_billing'";
-            $result = pg_query($link, $sql);
         } else {
-            //update laporan_hasil_pemeriksaan
             $sql = "UPDATE laporan_hasil_pemeriksaan SET status_bayar='1' WHERE kode_billing='$kode_billing'";
-            $result = pg_query($link, $sql);
+        }
+        $result = pg_query($link, $sql);
+        if (!$result) {
+            throw new Exception("Gagal update status bayar: " . pg_last_error($link));
         }
 
         // Commit transaksi jika semua berhasil
@@ -206,7 +264,13 @@ if ($status_bayar == '1') {
     } catch (Exception $e) {
         // Rollback transaksi jika terjadi error
         pg_query($link, "ROLLBACK");
-        echo "Terjadi kesalahan: " . $e->getMessage();
+        payment_log("Terjadi kesalahan insert data: " . $e->getMessage(), 'ERROR');
+        http_response_code(500);
+        echo json_encode([
+            'success' => false,
+            'message' => 'Terjadi kesalahan insert data'
+        ]);
+        exit;
     }
 
     // insert log payment teller
@@ -214,6 +278,7 @@ if ($status_bayar == '1') {
                 VALUES('$kode_billing','$merchant_channel','$curr_time','$masa','$tahun',$pokok,$denda,$total,'Success')";
     $result = pg_query($link, $sql);
 
+    payment_log("Response: Success. Received: " . json_encode($data), 'INFO');
     $response_code    = "00";
     $message        = "Success";
 

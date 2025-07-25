@@ -7,20 +7,38 @@ header("Access-Control-Allow-Methods: GET");
 require_once "koneksi.php";
 require_once "functions.php";
 
-if (function_exists($_GET['function'])) {
-    $_GET['function']();
-}
-
 $data = json_decode(file_get_contents("php://input"));
+
+if (empty($_GET['kode_billing'])) {
+    reversal_log("Response: Bad Request. Request: " . json_encode($_GET), 'ERROR');
+    http_response_code(400);
+    echo json_encode([
+        'success' => false,
+        'message' => 'Bad Request'
+    ]);
+    exit;
+}
 
 $kode_billing =  $_GET['kode_billing'];
 
 $sql = "SELECT * FROM transaksi_pajak
         WHERE kode_billing='" . $kode_billing . "'";
 $query = pg_query($link, $sql);
+
+if (!$query) {
+    reversal_log("Sql cek data transaksi error: " . pg_last_error($link), 'ERROR');
+    http_response_code(500);
+    echo json_encode([
+        'success' => false,
+        'message' => 'Sql cek data transaksi error'
+    ]);
+    exit;
+}
+
 $row = pg_fetch_array($query);
 
 if (!$row) {
+    reversal_log("Response: DATA TAGIHAN TIDAK DITEMUKAN. Received: " . json_encode($_GET), 'ERROR');
     $response_code    = "10";
     $message        = "DATA TAGIHAN TIDAK DITEMUKAN";
 } else {
@@ -38,6 +56,7 @@ if (!$row) {
     $sql = "UPDATE spt SET status_bayar='0' WHERE kode_billing='$kode_billing'";
     $result = pg_query($link, $sql);
 
+    reversal_log("Response: Success. Received: " . json_encode($_GET), 'INFO');
     $response_code    = "00";
     $message        = "Success";
 }
