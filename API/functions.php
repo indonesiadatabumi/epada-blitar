@@ -1,28 +1,8 @@
 <?php
 
-function inquiry_log($pesan, $level = 'INFO')
+function log_error($pesan, $level = 'INFO')
 {
-    $log_file = 'logs/inquiry.log';
-
-    $timestamp = date('Y-m-d H:i:s');
-    $log_entry = "[$timestamp] [$level] $pesan\n";
-
-    file_put_contents($log_file, $log_entry, FILE_APPEND);
-}
-
-function payment_log($pesan, $level = 'INFO')
-{
-    $log_file = 'logs/payment.log';
-
-    $timestamp = date('Y-m-d H:i:s');
-    $log_entry = "[$timestamp] [$level] $pesan\n";
-
-    file_put_contents($log_file, $log_entry, FILE_APPEND);
-}
-
-function reversal_log($pesan, $level = 'INFO')
-{
-    $log_file = 'logs/reversal.log';
+    $log_file = 'logs/error.log';
 
     $timestamp = date('Y-m-d H:i:s');
     $log_entry = "[$timestamp] [$level] $pesan\n";
@@ -38,7 +18,7 @@ function teller_log($service, $method, $ip_address, $user_agent, $request_body, 
     $query = pg_query($link, $sql);
 
     if (!$query) {
-        inquiry_log("Insert log teller gagal: " . pg_last_error($link), 'ERROR');
+        log_error("Insert log teller gagal: " . pg_last_error($link), 'ERROR');
         http_response_code(500);
         echo json_encode([
             'success' => false,
@@ -97,7 +77,7 @@ function get_diff_months($startDate, $endDate, $determination = 8)
             return $months;
         }
     } catch (Exception $e) {
-        inquiry_log("ERROR in get_diff_months: " . $e->getMessage(), "ERROR");
+        log_error("ERROR in get_diff_months: " . $e->getMessage(), "ERROR");
         return false;
     }
 }
@@ -105,7 +85,7 @@ function get_diff_months($startDate, $endDate, $determination = 8)
 function assess_fine($tax, $diff_month)
 {
     if (!is_numeric($tax) || !is_numeric($diff_month)) {
-        inquiry_log("Nilai pajak atau selisih bulan tidak valid di assess_fine", "ERROR");
+        log_error("Nilai pajak atau selisih bulan tidak valid di assess_fine", "ERROR");
         return false;
     }
 
@@ -115,7 +95,7 @@ function assess_fine($tax, $diff_month)
 function assess_fine_new($tax, $diff_month)
 {
     if (!is_numeric($tax) || !is_numeric($diff_month)) {
-        inquiry_log("Nilai pajak atau selisih bulan tidak valid di assess_fine_new", "ERROR");
+        log_error("Nilai pajak atau selisih bulan tidak valid di assess_fine_new", "ERROR");
         return false;
     }
 

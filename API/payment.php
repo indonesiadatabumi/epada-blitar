@@ -10,7 +10,7 @@ require_once "functions.php";
 $data = json_decode(file_get_contents("php://input"));
 
 if (!$data) {
-    payment_log("Invalid JSON Body", 'ERROR');
+    log_error("Invalid JSON Body", 'ERROR');
     http_response_code(400);
     echo json_encode([
         'success' => false,
@@ -22,7 +22,7 @@ $required_fields = ['Nop', 'Merchant', 'DateTime', 'Masa', 'Tahun', 'Pokok', 'To
 
 foreach ($required_fields as $field) {
     if (empty($data->$field)) {
-        payment_log("Missing field: $field. Request: " . json_encode($data), 'ERROR');
+        log_error("Missing field: $field. Request: " . json_encode($data), 'ERROR');
         http_response_code(400);
         echo json_encode([
             'success' => false,
@@ -50,7 +50,7 @@ $sql = "SELECT a.*, b.kompensasi, c.hrg_0_50 FROM payment.v_payment AS a
 $query = pg_query($link, $sql);
 
 if (!$query) {
-    payment_log("Sql cek data tagihan error: " . pg_last_error($link), 'ERROR');
+    log_error("Sql cek data tagihan error: " . pg_last_error($link), 'ERROR');
     http_response_code(500);
     echo json_encode([
         'success' => false,
@@ -94,7 +94,6 @@ if ($status_bayar == '1') {
                 VALUES('$kode_billing','$merchant_channel','$curr_time','$masa','$tahun',$pokok,$denda,$total,'DATA TAGIHAN TELAH LUNAS')";
     $result = pg_query($link, $sql);
 
-    payment_log("Response: DATA TAGIHAN TELAH LUNAS. Received: " . json_encode($data), 'ERROR');
     $response_code    = "13";
     $message        = "DATA TAGIHAN TELAH LUNAS";
 } elseif (empty($kd_booking)) {
@@ -103,7 +102,6 @@ if ($status_bayar == '1') {
                 VALUES('$kode_billing','$merchant_channel','$curr_time','$masa','$tahun',$pokok,$denda,$total,'DATA TAGIHAN TIDAK DITEMUKAN')";
     $result = pg_query($link, $sql);
 
-    payment_log("Response: DATA TAGIHAN TIDAK DITEMUKAN. Received: " . json_encode($data), 'ERROR');
     $response_code    = "10";
     $message        = "DATA TAGIHAN TIDAK DITEMUKAN";
 } elseif ($pokok_pajak != $pokok) {
@@ -112,7 +110,6 @@ if ($status_bayar == '1') {
                 VALUES('$kode_billing','$merchant_channel','$curr_time','$masa','$tahun',$pokok,$denda,$total,'JUMLAH TAGIHAN YANG DIBAYARKAN TIDAK SESUAI')";
     $result = pg_query($link, $sql);
 
-    payment_log("Response: JUMLAH TAGIHAN YANG DIBAYARKAN TIDAK SESUAI. Received: " . json_encode($data), 'ERROR');
     $response_code    = "14";
     $message        = "JUMLAH TAGIHAN YANG DIBAYARKAN TIDAK SESUAI";
 } else {
@@ -124,7 +121,7 @@ if ($status_bayar == '1') {
     $query = pg_query($link, $sql);
 
     if (!$query) {
-        payment_log("Sql cek data tagihan error: " . pg_last_error($link), 'ERROR');
+        error_log("Sql cek data tagihan error: " . pg_last_error($link), 'ERROR');
         http_response_code(500);
         echo json_encode([
             'success' => false,
@@ -264,7 +261,7 @@ if ($status_bayar == '1') {
     } catch (Exception $e) {
         // Rollback transaksi jika terjadi error
         pg_query($link, "ROLLBACK");
-        payment_log("Terjadi kesalahan insert data: " . $e->getMessage(), 'ERROR');
+        log_error("Terjadi kesalahan insert data: " . $e->getMessage(), 'ERROR');
         http_response_code(500);
         echo json_encode([
             'success' => false,
@@ -278,7 +275,6 @@ if ($status_bayar == '1') {
                 VALUES('$kode_billing','$merchant_channel','$curr_time','$masa','$tahun',$pokok,$denda,$total,'Success')";
     $result = pg_query($link, $sql);
 
-    payment_log("Response: Success. Received: " . json_encode($data), 'INFO');
     $response_code    = "00";
     $message        = "Success";
 

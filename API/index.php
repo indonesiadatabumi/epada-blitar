@@ -10,7 +10,7 @@ require_once "functions.php";
 $data = json_decode(file_get_contents("php://input"));
 
 if (empty($_GET['Nop']) || empty($_GET['Merchant'])) {
-    inquiry_log("Response: Bad Request. Request: " . json_encode($_GET), 'ERROR');
+    log_error("Response: Bad Request. Request: " . json_encode($_GET), 'ERROR');
     http_response_code(400);
     echo json_encode([
         'success' => false,
@@ -32,7 +32,7 @@ $sql = "SELECT a.*, b.jenis_spt_id, b.jenis_ketetapan, b.tgl_jatuh_tempo, c.komp
 $query = pg_query($link, $sql);
 
 if (!$query) {
-    inquiry_log("Sql cek data tagihan error: " . pg_last_error($link), 'ERROR');
+    log_error("Sql cek data tagihan error: " . pg_last_error($link), 'ERROR');
     http_response_code(500);
     echo json_encode([
         'success' => false,
@@ -44,12 +44,10 @@ if (!$query) {
 $row = pg_fetch_array($query);
 
 if (!$row) {
-    inquiry_log("Response: DATA TAGIHAN TIDAK DITEMUKAN. Received: " . json_encode($_GET), 'ERROR');
     $response_code    = "10";
     $message        = "DATA TAGIHAN TIDAK DITEMUKAN";
 } else {
     if ($row['status_bayar'] == '1') {
-        inquiry_log("Response: DATA TAGIHAN TELAH LUNAS. Received: " . json_encode($_GET), 'ERROR');
         $response_code    = "13";
         $message        = "DATA TAGIHAN TELAH LUNAS";
     } else {
@@ -149,7 +147,6 @@ if (!$row) {
 
         $transaction_id = date("YmdHis") . rand("1000", "9999");
 
-        inquiry_log("Response: Success. Received: " . json_encode($_GET), 'INFO');
         $response_code    = "00";
         $message        = "Success";
     }
