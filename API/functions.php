@@ -30,6 +30,24 @@ function reversal_log($pesan, $level = 'INFO')
     file_put_contents($log_file, $log_entry, FILE_APPEND);
 }
 
+function teller_log($service, $method, $ip_address, $user_agent, $request_body, $response_body, $status_code, $created_at)
+{
+    global $link;
+
+    $sql = "INSERT INTO log_teller (service, method, ip_address, user_agent, request_body, response_body, status_code, created_at)VALUES('$service', '$method', '$ip_address', '$user_agent', '$request_body', '$response_body', '$status_code', '$created_at')";
+    $query = pg_query($link, $sql);
+
+    if (!$query) {
+        inquiry_log("Insert log teller gagal: " . pg_last_error($link), 'ERROR');
+        http_response_code(500);
+        echo json_encode([
+            'success' => false,
+            'message' => 'Insert log teller gagal'
+        ]);
+        exit;
+    }
+}
+
 function get_diff_months($startDate, $endDate, $determination = 8)
 {
     try {

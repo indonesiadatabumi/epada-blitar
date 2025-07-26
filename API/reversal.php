@@ -68,4 +68,5 @@ $arr_stat['ErrorDesc'] = $message;
 
 $array_rest = ['Status' => $arr_stat];
 
+teller_log('REVERSAL', $_SERVER['REQUEST_METHOD'], $_SERVER['REMOTE_ADDR'], $_SERVER['HTTP_USER_AGENT'], json_encode($_GET), json_encode($array_rest), $response_code, date('Y-m-d H:i:s'));
 echo json_encode($array_rest, JSON_UNESCAPED_SLASHES);
